@@ -449,4 +449,47 @@ describe CanCan::Ability do
       @ability.send(:rules).size.should == 2
     end
   end
+
+  describe "#relevant_rules" do
+    require 'benchmark'
+
+    before do
+      module CanCan::Ability
+        private
+        def previous_implementation_of_relevant_rules(action, subject)
+          rules.reverse.select do |rule|
+            rule.expanded_actions = expand_actions(rule.actions)
+            rule.relevant? action, subject
+          end
+        end
+      end
+
+      @ability.can :read, Symbol
+      @ability.can :read, String
+      @ability.can :read, Integer
+    end
+
+    let(:previous_implementation_of_relevant_rules_execution_time) do
+      Benchmark.realtime do
+        10.times do
+          @ability.send(:previous_implementation_of_relevant_rules, :read, "string")
+        end
+      end
+    end
+
+    let(:relevant_rules_execution_time) do
+      Benchmark.realtime do
+        10.times do
+          @ability.send(:relevant_rules, :read, "string")
+        end
+      end
+    end
+
+    describe "performance" do
+      it "should be faster than relevant_rules without filtering matching subject" do
+        relevant_rules_execution_time.should < previous_implementation_of_relevant_rules_execution_time
+      end
+    end
+
+  end
 end
